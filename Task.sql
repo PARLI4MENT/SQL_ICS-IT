@@ -3,15 +3,17 @@ create procedure syn.usp_ImportFileCustomerSeasonal
 AS
 set nocount on
 begin
-	declare @RowCount int = (select count(*) from syn.SA_CustomerSeasonal)
-	declare @ErrorMessage varchar(max)
+	declare
+		--#4 Все переменные задаются в одном объявлении
+		@RowsCount int = (select count(*) from syn.SA_CustomerSeasonal) --#2 Не верное наименование переменной "@RowCount" => верное "@RowsCount"
+		,@ErrorMessage varchar(max)
 
 -- Проверка на корректность загрузки
 	if not exists (
-	select 1
-	from syn.ImportFile as f
-	where f.ID = @ID_Record
-		and f.FlagLoaded = cast(1 as bit)
+		select 1 --#3 Табуляция в блоке "if not exists"
+		from syn.ImportFile as imf --#1 Не верное наименование алиса => верное imf
+		where imf.ID = @ID_Record --Переименование алиаса
+			and imf.FlagLoaded = cast(1 as bit) --Переименование алиаса
 	)
 		begin
 			set @ErrorMessage = 'Ошибка при загрузке файла, проверьте корректность данных'
@@ -26,15 +28,15 @@ begin
 		,s.ID as ID_Season
 		,cast(cs.DateBegin as date) as DateBegin
 		,cast(cs.DateEnd as date) as DateEnd
-		,c_dist.ID as ID_dbo_CustomerDistributor
+		,cd.ID as ID_dbo_CustomerDistributor --#11 Не верное наименование алиса "c_dist" => верное "cd"
 		,cast(isnull(cs.FlagActive, 0) as bit) as FlagActive
 	into #CustomerSeasonal
 	from syn.SA_CustomerSeasonal cs
 		join dbo.Customer as c on c.UID_DS = cs.UID_DS_Customer
 			and c.ID_mapping_DataSource = 1
 		join dbo.Season as s on s.Name = cs.Season
-		join dbo.Customer as c_dist on c_dist.UID_DS = cs.UID_DS_CustomerDistributor
-			and c_dist.ID_mapping_DataSource = 1
+		join dbo.Customer as cd on cd.UID_DS = cs.UID_DS_CustomerDistributor
+			and cd.ID_mapping_DataSource = 1
 		join syn.CustomerSystemType as cst on cs.CustomerSystemType = cst.Name
 	where try_cast(cs.DateBegin as date) is not null
 		and try_cast(cs.DateEnd as date) is not null
@@ -46,7 +48,7 @@ begin
 		cs.*
 		,case
 			when c.ID is null then 'UID клиента отсутствует в справочнике "Клиент"'
-			when c_dist.ID is null then 'UID дистрибьютора отсутствует в справочнике "Клиент"'
+			when cd.ID is null then 'UID дистрибьютора отсутствует в справочнике "Клиент"'
 			when s.ID is null then 'Сезон отсутствует в справочнике "Сезон"'
 			when cst.ID is null then 'Тип клиента отсутствует в справочнике "Тип клиента"'
 			when try_cast(cs.DateBegin as date) is null then 'Невозможно определить Дату начала'
@@ -55,11 +57,12 @@ begin
 		end as Reason
 	into #BadInsertedRows
 	from syn.SA_CustomerSeasonal as cs
-	left join dbo.Customer as c on c.UID_DS = cs.UID_DS_Customer
-		and c.ID_mapping_DataSource = 1
-	left join dbo.Customer as c_dist on c_dist.UID_DS = cs.UID_DS_CustomerDistributor and c_dist.ID_mapping_DataSource = 1
-	left join dbo.Season as s on s.Name = cs.Season
-	left join syn.CustomerSystemType as cst on cst.Name = cs.CustomerSystemType
+		left join dbo.Customer as c on c.UID_DS = cs.UID_DS_Customer --#5 Не верная табуляция
+			and c.ID_mapping_DataSource = 1
+		left join dbo.Customer as c_dist on c_dist.UID_DS = cs.UID_DS_CustomerDistributor --#6 Не верная табуляция
+			and c_dist.ID_mapping_DataSource = 1 --#9 Отсутствует разделение на несколько строк, т.к длинное условие, не умещающиеся на экране
+		left join dbo.Season as s on s.Name = cs.Season --#7 Не верная табуляция
+		left join syn.CustomerSystemType as cst on cst.Name = cs.CustomerSystemType --#8 Не верная табуляция
 	where c.ID is null
 		or c_dist.ID is null
 		or s.ID is null
@@ -96,7 +99,7 @@ begin
 
 	-- Информационное сообщение
 	begin
-		select @ErrorMessage = concat('Обработано строк: ', @RowCount)
+		select @ErrorMessage = concat('Обработано строк: ', @RowsCount)
 		raiserror(@ErrorMessage, 1, 1)
 
 		--Формирование таблицы для отчетности
@@ -108,7 +111,8 @@ begin
 			,bir.UID_DS_CustomerDistributor as 'UID Дистрибьютора'
 			,bir.CustomerDistributor as 'Дистрибьютор'
 			,isnull(format(try_cast(bir.DateBegin as date), 'dd.MM.yyyy', 'ru-RU'), bir.DateBegin) as 'Дата начала'
-			,isnull(format(try_cast(birDateEnd as date), 'dd.MM.yyyy', 'ru-RU'), bir.DateEnd) as 'Дата окончания'
+			--#10 Ошибка в наименовании таблицы birDateEnd (отсутствует ".")=> Верно bir.DateEnd
+			,isnull(format(try_cast(bir.DateEnd as date), 'dd.MM.yyyy', 'ru-RU'), bir.DateEnd) as 'Дата окончания'
 			,bir.FlagActive as 'Активность'
 			,bir.Reason as 'Причина'
 		from #BadInsertedRows as bir
